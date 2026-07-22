@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="WallpaperPaths" type="String">
+      <label>Local wallpaper folders, one per line</label>
+      <default></default>
+    </entry>
+    <entry name="RotationMode" type="String">
+      <label>Wallpaper rotation order</label>
+      <default>name_asc</default>
+    </entry>
+    <entry name="RotateSeconds" type="Int">
+      <label>Seconds between wallpaper rotations</label>
+      <default>1800</default>
+    </entry>
+    <entry name="FillMode" type="Int">
+      <label>Sizing, cropping and positioning of the wallpaper image</label>
+      <default>3</default>
+    </entry>
+    <entry name="Color" type="Color">
+      <label>Background color</label>
+      <default>#000000</default>
+    </entry>
+    <entry name="TransitionType" type="Int">
+      <label>Transition effect between wallpapers</label>
+      <default>1</default>
+    </entry>
+    <entry name="TransitionDuration" type="Int">
+      <label>Transition duration in milliseconds</label>
+      <default>400</default>
+    </entry>
+    <entry name="WipeAngle" type="Double">
+      <label>Wipe transition angle in degrees</label>
+      <default>0</default>
+    </entry>
+    <entry name="WaveAngle" type="Double">
+      <label>Wave transition angle in degrees</label>
+      <default>0</default>
+    </entry>
+    <entry name="RandomPool" type="Int">
+      <label>Bitmask of effects to include in Random transition mode</label>
+      <default>63</default>
+    </entry>
+    <entry name="CurrentImage" type="String">
+      <label>Current wallpaper file</label>
+      <default></default>
+    </entry>
+    <entry name="CurrentIndex" type="Int">
+      <label>Current wallpaper index</label>
+      <default>-1</default>
+    </entry>
+  </group>
+</kcfg>
