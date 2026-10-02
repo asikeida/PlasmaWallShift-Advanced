@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="WallpaperPaths" type="String">
+      <label>Local wallpaper folders, one per line</label>
+      <default></default>
+    </entry>
+    <entry name="RotationMode" type="String">
+      <label>Wallpaper rotation order</label>
+      <default>name_asc</default>
+    </entry>
+    <entry name="RotateSeconds" type="Int">
+      <label>Seconds between wallpaper rotations</label>
+      <default>1800</default>
+    </entry>
+    <entry name="FillMode" type="Int">
+      <label>Sizing, cropping and positioning of the wallpaper image</label>
+      <default>3</default>
+    </entry>
+    <entry name="Color" type="Color">
+      <label>Background color</label>
+      <default>#000000</default>
+    </entry>
+    <entry name="TransitionType" type="Int">
+      <label>Transition effect between wallpapers</label>
+      <default>1</default>
+    </entry>
+    <entry name="TransitionDuration" type="Int">
+      <label>Transition duration in milliseconds</label>
+      <default>1000</default>
+    </entry>
+    <entry name="EasingMode" type="String">
+      <label>Transition timing curve preset</label>
+      <default>custom</default>
+    </entry>
+    <entry name="BezierX1" type="Double">
+      <label>First Bézier control point X coordinate</label>
+      <default>0.43</default>
+    </entry>
+    <entry name="BezierY1" type="Double">
+      <label>First Bézier control point Y coordinate</label>
+      <default>1.19</default>
+    </entry>
+    <entry name="BezierX2" type="Double">
+      <label>Second Bézier control point X coordinate</label>
+      <default>1.0</default>
+    </entry>
+    <entry name="BezierY2" type="Double">
+      <label>Second Bézier control point Y coordinate</label>
+      <default>0.4</default>
+    </entry>
+    <entry name="WipeAngle" type="Double">
+      <label>Wipe transition angle in degrees</label>
+      <default>0</default>
+    </entry>
+    <entry name="WaveAngle" type="Double">
+      <label>Wave transition angle in degrees</label>
+      <default>0</default>
+    </entry>
+    <entry name="EdgeSoftness" type="Double">
+      <label>Transition edge softness</label>
+      <default>0.05</default>
+    </entry>
+    <entry name="WaveAmplitude" type="Double">
+      <label>Wave transition amplitude</label>
+      <default>0.05</default>
+    </entry>
+    <entry name="WaveFrequency" type="Double">
+      <label>Wave transition frequency</label>
+      <default>40</default>
+    </entry>
+    <entry name="OriginMode" type="String">
+      <label>Origin mode for radial transitions</label>
+      <default>random</default>
+    </entry>
+    <entry name="OriginX" type="Double">
+      <label>Custom radial transition origin X coordinate</label>
+      <default>0.5</default>
+    </entry>
+    <entry name="OriginY" type="Double">
+      <label>Custom radial transition origin Y coordinate</label>
+      <default>0.5</default>
+    </entry>
+    <entry name="StripeCount" type="Int">
+      <label>Number of stripes in the stripe transition</label>
+      <default>12</default>
+    </entry>
+    <entry name="StripeAngle" type="Double">
+      <label>Stripe transition angle in degrees</label>
+      <default>30</default>
+    </entry>
+    <entry name="PixelSize" type="Double">
+      <label>Starting pixel block size as a fraction of the shorter screen edge</label>
+      <default>0.35</default>
+    </entry>
+    <entry name="IrisScale" type="Double">
+      <label>Initial iris slit height</label>
+      <default>0.2</default>
+    </entry>
+    <entry name="PortalTwist" type="Double">
+      <label>Portal swirl strength</label>
+      <default>1.2</default>
+    </entry>
+    <entry name="RandomPool" type="Int">
+      <label>Bitmask of effects to include in Random transition mode</label>
+      <default>1023</default>
+    </entry>
+    <entry name="CurrentImage" type="String">
+      <label>Current wallpaper file</label>
+      <default></default>
+    </entry>
+    <entry name="CurrentIndex" type="Int">
+      <label>Current wallpaper index</label>
+      <default>-1</default>
+    </entry>
+  </group>
+</kcfg>

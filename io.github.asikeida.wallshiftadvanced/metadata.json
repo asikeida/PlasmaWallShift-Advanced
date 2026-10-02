@@ -1,0 +1,25 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "asikeida@gmail.com",
+                "Name": "asikeida"
+            },
+            {
+                "Name": "eam2539"
+            }
+        ],
+        "BugReportUrl": "https://github.com/asikeida/PlasmaWallShift-Advanced/issues",
+        "Category": "Utilities",
+        "Description": "Rotate local wallpaper folders with advanced, editable animated transitions.",
+        "Description[zh_CN]": "从本地壁纸文件夹轮换壁纸，并提供可编辑的高级动画切换效果。",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "io.github.asikeida.wallshiftadvanced",
+        "License": "GPL-3.0-or-later",
+        "Name": "WallShift Advanced",
+        "Name[zh_CN]": "WallShift 高级版",
+        "Version": "0.2.0",
+        "Website": "https://github.com/asikeida/PlasmaWallShift-Advanced"
+    }
+}
