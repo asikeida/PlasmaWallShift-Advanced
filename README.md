@@ -16,6 +16,8 @@ WallShift Advanced is a KDE Plasma 6 wallpaper plugin for rotating local wallpap
 - Configurable random-effect pool.
 - Double-buffered image loading and latest-request queuing during active transitions.
 
+![WallShift Advanced settings with the extended Bézier editor](screenshots/settings-en.png)
+
 ## Install
 
 Requirements: KDE Plasma 6 and Qt 6.4 or newer. The optional global mouse-cursor origin requires [`kdotool`](https://github.com/jinliu/kdotool); without it, that mode safely falls back to the center of the screen.
