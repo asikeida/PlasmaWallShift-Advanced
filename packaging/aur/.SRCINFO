@@ -1,0 +1,16 @@
+pkgbase = plasma6-wallpapers-wallshift-advanced
+	pkgdesc = KDE Plasma 6 wallpaper rotation plugin with editable animated transitions
+	pkgver = 0.2.0
+	pkgrel = 1
+	url = https://github.com/asikeida/PlasmaWallShift-Advanced
+	arch = any
+	license = GPL-3.0-or-later
+	makedepends = qt6-shadertools
+	depends = glib2
+	depends = plasma-workspace
+	depends = qt6-declarative
+	optdepends = kdotool: use the global cursor as the radial transition origin
+	source = plasma6-wallpapers-wallshift-advanced-0.2.0.tar.gz::https://github.com/asikeida/PlasmaWallShift-Advanced/archive/refs/tags/v0.2.0.tar.gz
+	sha256sums = 54bab8989081b0abd0c3d8681b17380cdb2d4ff408bb975d176d8c9e2387c3fc
+
+pkgname = plasma6-wallpapers-wallshift-advanced

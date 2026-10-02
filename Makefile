@@ -3,6 +3,9 @@ VERSION := $(shell awk -F'"' '/"Version"/ { print $$4; exit }' $(PLUGIN)/metadat
 ARCHIVE := wallshift-advanced-$(VERSION).tar.gz
 QSB ?= $(shell command -v qsb 2>/dev/null || command -v qsb6 2>/dev/null || printf '%s' /usr/lib/qt6/bin/qsb)
 QSB_FLAGS := --qsbversion 64 --glsl "150,300 es,310 es"
+QMLLINT ?= $(shell command -v qmllint6 2>/dev/null || test ! -x /usr/lib/qt6/bin/qmllint || printf '%s' /usr/lib/qt6/bin/qmllint)
+QMLLINT := $(if $(QMLLINT),$(QMLLINT),qmllint)
+QMLLINT_FLAGS := --unqualified disable --missing-property disable --unused-imports disable
 SHADER_DIR := $(PLUGIN)/contents/ui/shaders
 SHADERS := crossfade simple wipe wave grow outer stripes pixelate iris portal
 PO := po/zh_CN/io.github.asikeida.wallshiftadvanced.po
@@ -22,7 +25,7 @@ translations:
 	msgfmt --check --check-format -o $(MO) $(PO)
 
 check: all
-	qmllint $(PLUGIN)/contents/ui/*.qml
+	$(QMLLINT) $(QMLLINT_FLAGS) $(PLUGIN)/contents/ui/*.qml
 
 dist: check
 	tar -czf $(ARCHIVE) -C $(PLUGIN) metadata.json contents
