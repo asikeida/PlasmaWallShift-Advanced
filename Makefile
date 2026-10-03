@@ -1,23 +1,24 @@
 PLUGIN := io.github.asikeida.wallshiftadvanced
 VERSION := $(shell awk -F'"' '/"Version"/ { print $$4; exit }' $(PLUGIN)/metadata.json)
 ARCHIVE := wallshift-advanced-$(VERSION).tar.gz
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 QSB ?= $(shell command -v qsb 2>/dev/null || command -v qsb6 2>/dev/null || printf '%s' /usr/lib/qt6/bin/qsb)
 QSB_FLAGS := --qsbversion 64 --glsl "150,300 es,310 es"
 QMLLINT ?= $(shell command -v qmllint6 2>/dev/null || test ! -x /usr/lib/qt6/bin/qmllint || printf '%s' /usr/lib/qt6/bin/qmllint)
 QMLLINT := $(if $(QMLLINT),$(QMLLINT),qmllint)
 QMLLINT_FLAGS := --unqualified disable --missing-property disable --unused-imports disable
 SHADER_DIR := $(PLUGIN)/contents/ui/shaders
-HELPER := $(PLUGIN)/contents/tools/wallshift-next
+HELPER := tools/wallshift-next
 KWIN_SCRIPT_ID := io.github.asikeida.wallshiftadvanced.next
-KWIN_SCRIPT := $(PLUGIN)/contents/tools/kwin-script/$(KWIN_SCRIPT_ID)
-SYSTEMD_UNIT := $(PLUGIN)/contents/tools/systemd/wallshift-next.service
+KWIN_SCRIPT := tools/kwin-script/$(KWIN_SCRIPT_ID)
+SYSTEMD_UNIT := tools/systemd/wallshift-next.service
 USER_BIN ?= $(HOME)/.local/bin
 USER_SYSTEMD ?= $(HOME)/.config/systemd/user
 SHADERS := crossfade simple wipe wave grow outer stripes pixelate iris portal
 PO := po/zh_CN/io.github.asikeida.wallshiftadvanced.po
 MO := $(PLUGIN)/contents/locale/zh_CN/LC_MESSAGES/plasma_wallpaper_io.github.asikeida.wallshiftadvanced.mo
 
-.PHONY: all shaders translations check dist install upgrade clean
+.PHONY: all shaders translations check dist release-check install upgrade clean
 
 all: shaders translations
 
@@ -32,10 +33,27 @@ translations:
 
 check: all
 	$(QMLLINT) $(QMLLINT_FLAGS) $(PLUGIN)/contents/ui/*.qml
+	sh -n $(HELPER)
+	systemd-analyze --user verify $(SYSTEMD_UNIT)
+	@test "$$(find $(PLUGIN) -type f -name metadata.json | wc -l)" -eq 1 || { \
+		echo "Wallpaper package must contain exactly one metadata.json" >&2; \
+		exit 1; \
+	}
 
 dist: check
-	tar -czf $(ARCHIVE) -C $(PLUGIN) metadata.json contents
+	@tar --sort=name --mtime="@$(SOURCE_DATE_EPOCH)" --owner=0 --group=0 --numeric-owner \
+		-C $(PLUGIN) -cf - metadata.json contents | gzip -n > $(ARCHIVE)
+	@test "$$(tar -tzf $(ARCHIVE) | grep -Ec '(^|/)metadata\.json$$')" -eq 1 || { \
+		echo "Archive must contain exactly one metadata.json" >&2; \
+		exit 1; \
+	}
 	@echo "Created $(ARCHIVE)"
+
+release-check: dist
+	@command -v appstreamcli >/dev/null || { echo "appstreamcli is required" >&2; exit 1; }
+	@tmp="$$(mktemp)"; trap 'rm -f "$$tmp"' EXIT; \
+		kpackagetool6 --type Plasma/Wallpaper --appstream-metainfo $(PLUGIN) > "$$tmp"; \
+		appstreamcli validate --pedantic "$$tmp"
 
 install:
 	kpackagetool6 --type Plasma/Wallpaper --install $(PLUGIN)

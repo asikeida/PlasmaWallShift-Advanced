@@ -1,6 +1,6 @@
 # PlasmaWallShift Advanced
 
-WallShift Advanced is a KDE Plasma 6 wallpaper plugin for rotating local wallpaper folders with editable animated transitions. It is an experimental fork of [PlasmaWallShift](https://github.com/luwisp/PlasmaWallShift).
+WallShift Advanced is a KDE Plasma 6 plugin for rotating local image and video wallpapers with editable animated transitions. It is an experimental fork of [PlasmaWallShift](https://github.com/luwisp/PlasmaWallShift).
 
 ## Features
 
@@ -14,14 +14,15 @@ WallShift Advanced is a KDE Plasma 6 wallpaper plugin for rotating local wallpap
 - Per-effect controls for origin, softness, wave shape, stripe count, pixel size, iris opening and portal twist.
 - Centered, random, custom or global mouse-cursor origins for radial transitions. Cursor origin uses `kdotool` on KDE Wayland.
 - Configurable random-effect pool.
-- Double-buffered image loading and latest-request queuing during active transitions.
+- Double-buffered media loading and latest-request queuing during active transitions.
+- Opt-in experimental local MP4, M4V, WebM, MKV and MOV playback with muted audio, first-frame preloading and frozen-frame Shader transitions. Video scanning is disabled by default.
 - `wallshift-next` command for reliable KDE global-shortcut integration on Wayland.
 
 ![WallShift Advanced settings with the extended Bézier editor](screenshots/settings-en.png)
 
 ## Install
 
-Requirements: KDE Plasma 6 and Qt 6.4 or newer. The optional global mouse-cursor origin requires [`kdotool`](https://github.com/jinliu/kdotool); without it, that mode safely falls back to the center of the screen.
+Requirements: KDE Plasma 6 and Qt 6.4 or newer. Experimental video playback additionally requires Qt Multimedia and system codecs (`qt6-multimedia` and a suitable FFmpeg/GStreamer backend on most distributions). Cached video covers use the system thumbnail service (`ffmpegthumbs` on many distributions) and safely fall back to a video icon. The optional global mouse-cursor origin requires [`kdotool`](https://github.com/jinliu/kdotool); without it, that mode safely falls back to the center of the screen.
 
 ```sh
 kpackagetool6 --type Plasma/Wallpaper --install io.github.asikeida.wallshiftadvanced
@@ -63,7 +64,7 @@ The migration tool creates a timestamped backup of Plasma's desktop configuratio
 
 ## Global shortcut
 
-`make install`, `make upgrade`, and the Arch package install the `wallshift-next` helper. It advances every desktop currently using WallShift Advanced while leaving other wallpaper plugins unchanged. Source installs also enable the bundled KWin shortcut bridge; package users can enable **WallShift Advanced Shortcut** under **System Settings → Window Management → KWin Scripts**.
+`make install`, `make upgrade`, and the Arch package install the `wallshift-next` helper. It advances every desktop currently using WallShift Advanced while leaving other wallpaper plugins unchanged. Source installs also enable the bundled KWin shortcut bridge; Arch package users can enable **WallShift Advanced Shortcut** under **System Settings → Window Management → KWin Scripts**. KDE Store installs contain only the wallpaper plugin and do not install the optional global-shortcut companion.
 
 The KWin action defaults to `Meta+F5`. KDE normally assigns that key to **Move Mouse to Focus**, so clear the old binding first and then assign `Meta+F5` to **WallShift Advanced — Next Wallpaper** under **System Settings → Keyboard → Shortcuts → KWin**. Using the System Settings page is more reliable on Wayland than editing `kglobalshortcutsrc` directly.
 
