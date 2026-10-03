@@ -63,9 +63,9 @@ The migration tool creates a timestamped backup of Plasma's desktop configuratio
 
 ## Global shortcut
 
-`make install`, `make upgrade`, and the Arch package install the `wallshift-next` helper. It advances every desktop currently using WallShift Advanced while leaving other wallpaper plugins unchanged.
+`make install`, `make upgrade`, and the Arch package install the `wallshift-next` helper. It advances every desktop currently using WallShift Advanced while leaving other wallpaper plugins unchanged. Source installs also enable the bundled KWin shortcut bridge; package users can enable **WallShift Advanced Shortcut** under **System Settings → Window Management → KWin Scripts**.
 
-On Plasma 6, bind the command through **System Settings → Keyboard → Shortcuts → Add New → Command or Script**. Enter `wallshift-next` as the command, choose a shortcut, and apply the change. Using the System Settings page is more reliable on Wayland than editing `kglobalshortcutsrc` directly.
+The KWin action defaults to `Meta+F5`. KDE normally assigns that key to **Move Mouse to Focus**, so clear the old binding first and then assign `Meta+F5` to **WallShift Advanced — Next Wallpaper** under **System Settings → Keyboard → Shortcuts → KWin**. Using the System Settings page is more reliable on Wayland than editing `kglobalshortcutsrc` directly.
 
 ## Build shaders
 

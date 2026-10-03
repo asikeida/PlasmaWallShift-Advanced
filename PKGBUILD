@@ -20,8 +20,11 @@ package() {
 
   install -Dm755 "$startdir/io.github.asikeida.wallshiftadvanced/contents/tools/wallshift-next" \
     "$pkgdir/usr/bin/wallshift-next"
-  install -Dm644 "$startdir/io.github.asikeida.wallshiftadvanced/contents/tools/io.github.asikeida.wallshiftadvanced.next.desktop" \
-    "$pkgdir/usr/share/applications/io.github.asikeida.wallshiftadvanced.next.desktop"
+  install -d "$pkgdir/usr/share/kwin/scripts"
+  cp -a "$startdir/io.github.asikeida.wallshiftadvanced/contents/tools/kwin-script/io.github.asikeida.wallshiftadvanced.next" \
+    "$pkgdir/usr/share/kwin/scripts/io.github.asikeida.wallshiftadvanced.next"
+  install -Dm644 "$startdir/io.github.asikeida.wallshiftadvanced/contents/tools/systemd/wallshift-next.service" \
+    "$pkgdir/usr/lib/systemd/user/wallshift-next.service"
 
   install -Dm644 "$startdir/LICENSE" \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

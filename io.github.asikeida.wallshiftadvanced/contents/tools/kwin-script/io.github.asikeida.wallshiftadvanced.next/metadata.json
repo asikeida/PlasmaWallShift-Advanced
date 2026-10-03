@@ -1,0 +1,14 @@
+{
+    "KPlugin": {
+        "Name": "WallShift Advanced Shortcut",
+        "Name[zh_CN]": "WallShift 高级版快捷键",
+        "Description": "Register the next-wallpaper global shortcut",
+        "Description[zh_CN]": "注册下一张壁纸全局快捷键",
+        "Id": "io.github.asikeida.wallshiftadvanced.next",
+        "Version": "1.0.0",
+        "License": "GPL-3.0-or-later"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}

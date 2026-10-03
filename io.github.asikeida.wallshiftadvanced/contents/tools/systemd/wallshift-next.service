@@ -1,0 +1,6 @@
+[Unit]
+Description=Switch WallShift Advanced to the next wallpaper
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env wallshift-next

@@ -8,9 +8,11 @@ QMLLINT := $(if $(QMLLINT),$(QMLLINT),qmllint)
 QMLLINT_FLAGS := --unqualified disable --missing-property disable --unused-imports disable
 SHADER_DIR := $(PLUGIN)/contents/ui/shaders
 HELPER := $(PLUGIN)/contents/tools/wallshift-next
-HELPER_DESKTOP := $(PLUGIN)/contents/tools/io.github.asikeida.wallshiftadvanced.next.desktop
+KWIN_SCRIPT_ID := io.github.asikeida.wallshiftadvanced.next
+KWIN_SCRIPT := $(PLUGIN)/contents/tools/kwin-script/$(KWIN_SCRIPT_ID)
+SYSTEMD_UNIT := $(PLUGIN)/contents/tools/systemd/wallshift-next.service
 USER_BIN ?= $(HOME)/.local/bin
-USER_APPLICATIONS ?= $(HOME)/.local/share/applications
+USER_SYSTEMD ?= $(HOME)/.config/systemd/user
 SHADERS := crossfade simple wipe wave grow outer stripes pixelate iris portal
 PO := po/zh_CN/io.github.asikeida.wallshiftadvanced.po
 MO := $(PLUGIN)/contents/locale/zh_CN/LC_MESSAGES/plasma_wallpaper_io.github.asikeida.wallshiftadvanced.mo
@@ -38,12 +40,22 @@ dist: check
 install:
 	kpackagetool6 --type Plasma/Wallpaper --install $(PLUGIN)
 	install -Dm755 $(HELPER) $(USER_BIN)/wallshift-next
-	install -Dm644 $(HELPER_DESKTOP) $(USER_APPLICATIONS)/io.github.asikeida.wallshiftadvanced.next.desktop
+	install -Dm644 $(SYSTEMD_UNIT) $(USER_SYSTEMD)/wallshift-next.service
+	kpackagetool6 --type KWin/Script --install $(KWIN_SCRIPT)
+	kwriteconfig6 --file kwinrc --group Plugins --key $(KWIN_SCRIPT_ID)Enabled true
+	systemctl --user daemon-reload
+	qdbus6 org.kde.KWin /KWin reconfigure
 
 upgrade:
 	kpackagetool6 --type Plasma/Wallpaper --upgrade $(PLUGIN)
 	install -Dm755 $(HELPER) $(USER_BIN)/wallshift-next
-	install -Dm644 $(HELPER_DESKTOP) $(USER_APPLICATIONS)/io.github.asikeida.wallshiftadvanced.next.desktop
+	install -Dm644 $(SYSTEMD_UNIT) $(USER_SYSTEMD)/wallshift-next.service
+	@if ! kpackagetool6 --type KWin/Script --upgrade $(KWIN_SCRIPT); then \
+		kpackagetool6 --type KWin/Script --install $(KWIN_SCRIPT); \
+	fi
+	kwriteconfig6 --file kwinrc --group Plugins --key $(KWIN_SCRIPT_ID)Enabled true
+	systemctl --user daemon-reload
+	qdbus6 org.kde.KWin /KWin reconfigure
 
 clean:
 	rm -f $(SHADER_DIR)/*.qsb $(ARCHIVE)
