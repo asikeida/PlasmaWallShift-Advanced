@@ -75,10 +75,13 @@ Item {
         }
         if (immediate || !s.currentSource)
             _showImmediate(source);
-        else if (source === s.currentSource || source === s.pendingSource)
+        else if (s.running) {
+            // Keep only the latest requested destination. Selecting the image
+            // already entering cancels any previously queued follow-up, while
+            // selecting the outgoing image queues a return after completion.
+            s.queuedSource = source === s.pendingSource ? "" : source;
+        } else if (source === s.currentSource)
             return ;
-        else if (s.running)
-            s.queuedSource = source;
         else
             _beginTransition(source);
     }
