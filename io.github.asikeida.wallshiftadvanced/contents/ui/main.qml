@@ -6,6 +6,7 @@ import Qt.labs.folderlistmodel
 import QtCore
 import QtQuick
 import QtQuick.Window
+import "MediaUtils.js" as MediaUtils
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.plasma.plasmoid
@@ -13,19 +14,23 @@ import org.kde.plasma.plasmoid
 WallpaperItem {
     id: root
 
-    property var images: []
+    property var mediaItems: []
     property var randomQueue: []
     property var scanFolders: []
-    property string visibleImage: root.configuration.CurrentImage
+    property string visibleMedia: root.configuration.CurrentMedia || root.configuration.CurrentImage
+    property var failedMediaPaths: ({})
     property string statusText: ""
-    property string pendingCursorSource: ""
+    property var pendingCursorEntry: null
     property bool cursorLookupRunning: false
     property bool nextTriggerWatcherReady: false
+    readonly property int visibleMediaIndex: root.indexOfMedia(root.visibleMedia)
+    readonly property string visibleMediaKind: visibleMediaIndex >= 0 ? root.mediaItems[visibleMediaIndex].kind : "none"
     readonly property string cursorLookupCommand: "kdotool getmouselocation --shell"
     property var zhText: ({
         "Move to Trash": "移到回收站",
         "Next Wallpaper": "下一张壁纸",
-        "Open Current Image": "打开当前图片"
+        "No playable media": "没有可播放的媒体",
+        "Open Current Media": "打开当前媒体"
     })
 
     function uiText(message) {
@@ -74,13 +79,11 @@ WallpaperItem {
         return "'" + String(value || "").replace(/'/g, "'\\''") + "'";
     }
 
-    function isImagePath(path) {
-        return /\.(jpe?g|png|webp|bmp)$/i.test(String(path || ""));
-    }
-
     function resetScanFolders() {
         root.scanFolders = root.folderPaths();
         root.randomQueue = [];
+        root.failedMediaPaths = {};
+        root.statusText = "";
         rebuildTimer.restart();
     }
 
@@ -94,9 +97,9 @@ WallpaperItem {
 
     function updateSourceSize() {
         if (root.configuration.FillMode === Image.Tile)
-            wallpaperImage.sourceSize = Qt.size(0, 0);
+            wallpaperMedia.sourceSize = Qt.size(0, 0);
         else
-            wallpaperImage.sourceSize = Qt.size(root.screenWidth(), root.screenHeight());
+            wallpaperMedia.sourceSize = Qt.size(root.screenWidth(), root.screenHeight());
     }
 
     function fileModifiedMs(value) {
@@ -105,7 +108,7 @@ WallpaperItem {
         return isNaN(time) ? 0 : time;
     }
 
-    function rebuildImages() {
+    function rebuildMedia() {
         var found = [];
         var seen = {
         };
@@ -134,15 +137,11 @@ WallpaperItem {
                     }
                     continue;
                 }
-                if (!root.isImagePath(path))
+                if (!MediaUtils.isSupportedPath(path, root.configuration.IncludeImages, root.configuration.IncludeVideos))
                     continue;
 
                 seen[path] = true;
-                found.push({
-                    "path": path,
-                    "name": String(model.get(j, "fileName") || path),
-                    "modified": root.fileModifiedMs(model.get(j, "fileModified"))
-                });
+                found.push(MediaUtils.makeEntry(path, String(model.get(j, "fileName") || path), root.fileModifiedMs(model.get(j, "fileModified")), root.pathToUrl(path)));
             }
         }
         var mode = String(root.configuration.RotationMode || "name_asc");
@@ -158,43 +157,44 @@ WallpaperItem {
             found.sort(function(a, b) {
             return a.name.localeCompare(b.name) || a.path.localeCompare(b.path);
         });
-        var previousVisible = root.visibleImage;
-        root.images = found;
+        var previousVisible = root.visibleMedia;
+        root.mediaItems = found;
         root.randomQueue = [];
+        root.failedMediaPaths = {};
         if (addedFolder)
             root.scanFolders = folders;
 
-        var visibleIndex = root.indexOfImage(previousVisible);
+        var visibleIndex = root.indexOfMedia(previousVisible);
         if (visibleIndex >= 0) {
-            root.configuration.CurrentImage = previousVisible;
+            root.configuration.CurrentMedia = previousVisible;
             root.configuration.CurrentIndex = visibleIndex;
             root.configuration.writeConfig();
             return ;
         }
-        root.showConfiguredOrFirstImage();
+        root.showConfiguredOrFirstMedia();
     }
 
-    function showConfiguredOrFirstImage() {
-        if (root.images.length === 0) {
-            root.visibleImage = "";
-            root.configuration.CurrentImage = "";
+    function showConfiguredOrFirstMedia() {
+        if (root.mediaItems.length === 0) {
+            root.visibleMedia = "";
+            root.configuration.CurrentMedia = "";
             root.configuration.CurrentIndex = -1;
             root.configuration.writeConfig();
-            wallpaperImage.setImage("", true);
+            wallpaperMedia.setMedia(null, true);
             return ;
         }
-        var current = root.normalizePath(root.configuration.CurrentImage);
-        var index = root.indexOfImage(current);
+        var current = root.normalizePath(root.configuration.CurrentMedia || root.configuration.CurrentImage);
+        var index = root.indexOfMedia(current);
         if (index < 0) {
             index = 0;
-            current = root.images[index].path;
+            current = root.mediaItems[index].path;
         }
-        root.showImage(index, true);
+        root.showMedia(index, true);
     }
 
-    function indexOfImage(path) {
-        for (var i = 0; i < root.images.length; i++) {
-            if (root.images[i].path === path)
+    function indexOfMedia(path) {
+        for (var i = 0; i < root.mediaItems.length; i++) {
+            if (root.mediaItems[i].path === path)
                 return i;
 
         }
@@ -213,26 +213,33 @@ WallpaperItem {
     }
 
     function nextIndex() {
-        if (root.images.length === 0)
+        if (root.mediaItems.length === 0)
             return -1;
 
         if (String(root.configuration.RotationMode || "") === "random") {
             if (root.randomQueue.length === 0) {
                 var indices = [];
-                for (var i = 0; i < root.images.length; i++) {
-                    indices.push(i);
+                for (var i = 0; i < root.mediaItems.length; i++) {
+                    if (!root.failedMediaPaths[root.mediaItems[i].path])
+                        indices.push(i);
                 }
                 root.randomQueue = root.shuffle(indices);
             }
-            var currentIndex = root.indexOfImage(root.visibleImage);
+            var currentIndex = root.indexOfMedia(root.visibleMedia);
             var next = root.randomQueue.shift();
-            if (root.images.length > 1 && next === currentIndex) {
+            if (root.randomQueue.length > 0 && next === currentIndex) {
                 root.randomQueue.push(next);
                 next = root.randomQueue.shift();
             }
-            return next;
+            return next === undefined ? -1 : next;
         }
-        return (Math.max(0, root.indexOfImage(root.visibleImage)) + 1) % root.images.length;
+        var start = Math.max(0, root.indexOfMedia(root.visibleMedia));
+        for (var offset = 1; offset <= root.mediaItems.length; ++offset) {
+            var candidate = (start + offset) % root.mediaItems.length;
+            if (!root.failedMediaPaths[root.mediaItems[candidate].path])
+                return candidate;
+        }
+        return -1;
     }
 
     function randomTransitionOrigin() {
@@ -286,7 +293,7 @@ WallpaperItem {
     }
 
     function cancelCursorLookup() {
-        root.pendingCursorSource = "";
+        root.pendingCursorEntry = null;
         if (!root.cursorLookupRunning)
             return ;
 
@@ -295,8 +302,8 @@ WallpaperItem {
         cursorLookupTimeout.stop();
     }
 
-    function requestCursorTransition(source) {
-        root.pendingCursorSource = source;
+    function requestCursorTransition(entry) {
+        root.pendingCursorEntry = entry;
         if (root.cursorLookupRunning)
             return ;
 
@@ -305,58 +312,98 @@ WallpaperItem {
         cursorExecutable.connectSource(root.cursorLookupCommand);
     }
 
-    function showImage(index, immediate) {
-        if (index < 0 || index >= root.images.length)
+    function showMedia(index, immediate) {
+        if (index < 0 || index >= root.mediaItems.length)
             return ;
 
-        var path = root.images[index].path;
-        root.visibleImage = path;
-        root.configuration.CurrentImage = path;
+        var entry = root.mediaItems[index];
+        var path = entry.path;
+        root.visibleMedia = path;
+        root.configuration.CurrentMedia = path;
+        if (entry.kind === "image")
+            root.configuration.CurrentImage = path;
         root.configuration.CurrentIndex = index;
         root.configuration.writeConfig();
         root.updateSourceSize();
-        var source = root.pathToUrl(path);
         var useCursor = !immediate && root.transitionUsesOrigin() && String(root.configuration.OriginMode || "") === "cursor";
         if (useCursor) {
-            root.requestCursorTransition(source);
+            root.requestCursorTransition(entry);
             return ;
         }
         root.cancelCursorLookup();
-        wallpaperImage.transitionOrigin = immediate ? Qt.point(0.5, 0.5) : root.configuredTransitionOrigin();
-        wallpaperImage.setImage(source, immediate || false);
+        wallpaperMedia.transitionOrigin = immediate ? Qt.point(0.5, 0.5) : root.configuredTransitionOrigin();
+        wallpaperMedia.setMedia(entry, immediate || false);
     }
 
     function rotateNext(immediate) {
-        root.showImage(root.nextIndex(), immediate || false);
+        root.showMedia(root.nextIndex(), immediate || false);
     }
 
-    function trashCurrentImage() {
-        if (!root.visibleImage)
+    function advanceAfterPlayback() {
+        var index = root.nextIndex();
+        if (index < 0)
+            return;
+
+        if (root.mediaItems[index].path === wallpaperMedia.currentPath)
+            wallpaperMedia.restartActiveVideo();
+        else
+            root.showMedia(index, false);
+    }
+
+    function trashCurrentMedia() {
+        if (!root.visibleMedia)
             return ;
 
-        var trashPath = root.visibleImage;
-        var currentIndex = root.indexOfImage(trashPath);
+        var trashPath = root.visibleMedia;
+        var currentIndex = root.indexOfMedia(trashPath);
         var remaining = [];
-        for (var i = 0; i < root.images.length; i++) {
-            if (root.images[i].path !== trashPath)
-                remaining.push(root.images[i]);
+        for (var i = 0; i < root.mediaItems.length; i++) {
+            if (root.mediaItems[i].path !== trashPath)
+                remaining.push(root.mediaItems[i]);
 
         }
-        root.images = remaining;
+        root.mediaItems = remaining;
         root.randomQueue = [];
-        if (root.images.length === 0) {
-            root.visibleImage = "";
-            root.configuration.CurrentImage = "";
+        if (root.mediaItems.length === 0) {
+            root.visibleMedia = "";
+            root.configuration.CurrentMedia = "";
             root.configuration.CurrentIndex = -1;
             root.configuration.writeConfig();
-            wallpaperImage.setImage("", true);
+            wallpaperMedia.setMedia(null, true);
         } else {
-            if (currentIndex < 0 || currentIndex >= root.images.length)
+            if (currentIndex < 0 || currentIndex >= root.mediaItems.length)
                 currentIndex = 0;
 
-            root.showImage(currentIndex, false);
+            root.showMedia(currentIndex, false);
         }
         executable.connectSource("gio trash " + root.shellQuote(trashPath));
+    }
+
+    function handleMediaError(path, reason) {
+        var failed = {};
+        var count = 0;
+        for (var existingPath in root.failedMediaPaths) {
+            if (root.failedMediaPaths[existingPath]) {
+                failed[existingPath] = true;
+                count += 1;
+            }
+        }
+        if (path && !failed[path]) {
+            failed[path] = true;
+            count += 1;
+        }
+        root.failedMediaPaths = failed;
+        root.randomQueue = [];
+        if (count >= root.mediaItems.length) {
+            root.statusText = root.uiText("No playable media") + "\n" + reason;
+            return;
+        }
+        if (path && path !== root.visibleMedia)
+            return;
+
+        Qt.callLater(function() {
+            root.rotateNext(true);
+        });
     }
 
     Component.onCompleted: {
@@ -367,20 +414,20 @@ WallpaperItem {
         PlasmaCore.Action {
             text: root.uiText("Next Wallpaper")
             icon.name: "view-refresh"
-            enabled: root.images.length > 1
+            enabled: root.mediaItems.length > 1
             onTriggered: root.rotateNext(false)
         },
         PlasmaCore.Action {
-            text: root.uiText("Open Current Image")
+            text: root.uiText("Open Current Media")
             icon.name: "document-open"
-            enabled: root.visibleImage.length > 0
-            onTriggered: Qt.openUrlExternally(root.pathToUrl(root.visibleImage))
+            enabled: root.visibleMedia.length > 0
+            onTriggered: Qt.openUrlExternally(root.pathToUrl(root.visibleMedia))
         },
         PlasmaCore.Action {
             text: root.uiText("Move to Trash")
             icon.name: "user-trash"
-            enabled: root.visibleImage.length > 0
-            onTriggered: root.trashCurrentImage()
+            enabled: root.visibleMedia.length > 0
+            onTriggered: root.trashCurrentMedia()
         }
     ]
 
@@ -389,7 +436,7 @@ WallpaperItem {
 
         interval: 100
         repeat: false
-        onTriggered: root.rebuildImages()
+        onTriggered: root.rebuildMedia()
     }
 
     Timer {
@@ -397,7 +444,7 @@ WallpaperItem {
 
         interval: Math.max(1, root.configuration.RotateSeconds || 1800) * 1000
         repeat: true
-        running: root.images.length > 1
+        running: root.mediaItems.length > 1 && root.visibleMediaKind !== "video"
         onTriggered: root.rotateNext(false)
     }
 
@@ -409,13 +456,13 @@ WallpaperItem {
         onTriggered: {
             cursorExecutable.disconnectSource(root.cursorLookupCommand);
             root.cursorLookupRunning = false;
-            var pendingSource = root.pendingCursorSource;
-            root.pendingCursorSource = "";
-            if (!pendingSource)
+            var pendingEntry = root.pendingCursorEntry;
+            root.pendingCursorEntry = null;
+            if (!pendingEntry)
                 return ;
 
-            wallpaperImage.transitionOrigin = Qt.point(0.5, 0.5);
-            wallpaperImage.setImage(pendingSource, false);
+            wallpaperMedia.transitionOrigin = Qt.point(0.5, 0.5);
+            wallpaperMedia.setMedia(pendingEntry, false);
         }
     }
 
@@ -428,7 +475,7 @@ WallpaperItem {
 
         delegate: FolderListModel {
             folder: root.pathToUrl(modelData)
-            nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp", "*.JPG", "*.JPEG", "*.PNG", "*.WEBP", "*.BMP"]
+            nameFilters: MediaUtils.nameFilters(root.configuration.IncludeImages, root.configuration.IncludeVideos)
             showDirs: true
             showFiles: true
             showHidden: false
@@ -450,9 +497,17 @@ WallpaperItem {
 
         function onFillModeChanged() {
             root.updateSourceSize();
-            if (root.visibleImage.length > 0)
-                wallpaperImage.setImage(root.pathToUrl(root.visibleImage), true);
+            if (root.visibleMediaIndex >= 0)
+                wallpaperMedia.setMedia(root.mediaItems[root.visibleMediaIndex], true);
 
+        }
+
+        function onIncludeImagesChanged() {
+            root.resetScanFolders();
+        }
+
+        function onIncludeVideosChanged() {
+            root.resetScanFolders();
         }
 
         function onRotateSecondsChanged() {
@@ -475,7 +530,7 @@ WallpaperItem {
     Instantiator {
         model: nextTriggerModel
         onObjectAdded: function(index, object) {
-            if (root.nextTriggerWatcherReady && root.images.length > 1)
+            if (root.nextTriggerWatcherReady && root.mediaItems.length > 1)
                 root.rotateNext(false);
         }
 
@@ -514,22 +569,23 @@ WallpaperItem {
             cursorExecutable.disconnectSource(source);
             root.cursorLookupRunning = false;
             cursorLookupTimeout.stop();
-            var pendingSource = root.pendingCursorSource;
-            root.pendingCursorSource = "";
-            if (!pendingSource)
+            var pendingEntry = root.pendingCursorEntry;
+            root.pendingCursorEntry = null;
+            if (!pendingEntry)
                 return ;
 
             var mode = String(root.configuration.OriginMode || "");
-            wallpaperImage.transitionOrigin = mode === "cursor" ? root.normalizedCursorOrigin(data && data["stdout"] ? data["stdout"] : "") : root.configuredTransitionOrigin();
-            wallpaperImage.setImage(pendingSource, false);
+            wallpaperMedia.transitionOrigin = mode === "cursor" ? root.normalizedCursorOrigin(data && data["stdout"] ? data["stdout"] : "") : root.configuredTransitionOrigin();
+            wallpaperMedia.setMedia(pendingEntry, false);
         }
     }
 
     WallpaperTransition {
-        id: wallpaperImage
+        id: wallpaperMedia
 
         anchors.fill: parent
         z: 1
+        playbackEnabled: root.visible
         fillMode: root.configuration.FillMode
         transitionType: root.configuration.TransitionType
         transitionDuration: root.configuration.TransitionDuration
@@ -549,7 +605,24 @@ WallpaperItem {
         irisScale: root.configuration.IrisScale
         portalTwist: root.configuration.PortalTwist
         randomPool: root.configuration.RandomPool
-        onImageError: root.rotateNext(true)
+        onMediaError: function(path, reason) {
+            root.handleMediaError(path, reason);
+        }
+        onImageReady: root.statusText = ""
+        onPlaybackEnded: root.advanceAfterPlayback()
+    }
+
+    Text {
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.8, 640)
+        z: 2
+        visible: root.statusText.length > 0
+        text: root.statusText
+        color: "white"
+        style: Text.Outline
+        styleColor: "black"
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
     }
 
 }

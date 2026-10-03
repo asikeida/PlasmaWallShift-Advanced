@@ -30,6 +30,9 @@ msgstr "下一张壁纸"
 msgid "Open Current Image"
 msgstr "打开当前图片"
 
+msgid "Open Current Media"
+msgstr "打开当前媒体"
+
 msgid "Move to Trash"
 msgstr "移到回收站"
 
@@ -42,11 +45,32 @@ msgstr "图像"
 msgid "%1 images"
 msgstr "%1 张图像"
 
+msgid "%1 images, %2 videos"
+msgstr "%1 张图像，%2 个视频"
+
+msgid "Images and videos"
+msgstr "图像与视频"
+
+msgid "Include images"
+msgstr "包含图像"
+
+msgid "Include videos (experimental)"
+msgstr "包含视频（实验性）"
+
 msgid "Add one or more wallpaper folders."
 msgstr "添加一个或多个壁纸文件夹。"
 
 msgid "No images found in the configured folders."
 msgstr "配置的文件夹中没有找到图像。"
+
+msgid "No media found in the configured folders."
+msgstr "配置的文件夹中没有找到媒体文件。"
+
+msgid "No playable media"
+msgstr "没有可播放的媒体"
+
+msgid "Video audio is disabled. Videos play once, then advance."
+msgstr "视频音频已禁用。视频播放一次后自动切换。"
 
 msgid "Choose Wallpaper Folder"
 msgstr "选择壁纸文件夹"

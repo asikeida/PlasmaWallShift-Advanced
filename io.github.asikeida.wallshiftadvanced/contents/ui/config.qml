@@ -3,7 +3,9 @@
 */
 
 import "EasingUtils.js" as EasingUtils
+import "MediaUtils.js" as MediaUtils
 import Qt.labs.folderlistmodel
+import QtCore
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Dialogs
@@ -14,7 +16,11 @@ import org.kde.kquickcontrols as KQC2
 Item {
     id: root
 
+    property var configDialog
+    property var wallpaperConfiguration
     property string cfg_WallpaperPaths
+    property bool cfg_IncludeImages
+    property bool cfg_IncludeVideos
     property string cfg_RotationMode
     property int cfg_RotateSeconds
     property int cfg_FillMode
@@ -43,11 +49,13 @@ Item {
     property int rotateHoursPart: 0
     property int rotateMinutesPart: 0
     property int rotateSecondsPart: 0
-    property int imageCount: previewImages.count
+    property int imageCount: 0
+    property int videoCount: 0
     property var scanFolders: []
     property var zhText: ({
         "%1 degrees": "%1 度",
         "%1 images": "%1 张图像",
+        "%1 images, %2 videos": "%1 张图像，%2 个视频",
         "%1 ms": "%1 毫秒",
         "Add one or more wallpaper folders.": "添加一个或多个壁纸文件夹。",
         "Add...": "添加...",
@@ -71,6 +79,9 @@ Item {
         "Iris bloom": "虹膜绽放",
         "Iris opening:": "虹膜开度：",
         "Images": "图像",
+        "Images and videos": "图像与视频",
+        "Include images": "包含图像",
+        "Include videos (experimental)": "包含视频（实验性）",
         "Drag P1 or P2 across the extended grid, or enter exact values below.": "可在扩展网格中拖动 P1 或 P2，也可以在下方输入精确参数。",
         "Linear": "线性",
         "Mouse cursor (KWin)": "鼠标位置（KWin）",
@@ -78,6 +89,7 @@ Item {
         "Modified time (oldest first)": "按修改时间（最旧在前）",
         "Name": "名称",
         "No images found in the configured folders.": "配置的文件夹中没有找到图像。",
+        "No media found in the configured folders.": "配置的文件夹中没有找到媒体文件。",
         "None (instant)": "无（瞬切）",
         "Order:": "顺序：",
         "Outer": "收缩",
@@ -105,6 +117,7 @@ Item {
         "Stripe count:": "条纹数量：",
         "Stripes": "条纹",
         "Switch every:": "切换间隔：",
+        "Video audio is disabled. Videos play once, then advance.": "视频音频已禁用。视频播放一次后自动切换。",
         "Tiled": "平铺",
         "Transition:": "动画：",
         "Wave": "波浪",
@@ -128,6 +141,13 @@ Item {
 
         }
         return translated;
+    }
+
+    function mediaCountText() {
+        var translated = i18nd("plasma_wallpaper_io.github.asikeida.wallshiftadvanced", "%1 images, %2 videos", root.imageCount, root.videoCount);
+        if (Qt.locale().name.indexOf("zh") === 0)
+            translated = "%1 张图像，%2 个视频";
+        return String(translated).replace("%1", root.imageCount).replace("%2", root.videoCount);
     }
 
     function splitSeconds(totalSeconds) {
@@ -168,6 +188,14 @@ Item {
         return "file://" + String(path).split("/").map(function(part) {
             return encodeURIComponent(part);
         }).join("/");
+    }
+
+    function videoThumbnailUrls(path) {
+        var cacheRoot = String(StandardPaths.writableLocation(StandardPaths.GenericCacheLocation)).replace(/\/$/, "");
+        var hash = Qt.md5(root.pathToUrl(path));
+        return ["x-large", "large", "xx-large", "normal"].map(function(size) {
+            return cacheRoot + "/thumbnails/" + size + "/" + hash + ".png";
+        });
     }
 
     function folderPaths() {
@@ -238,10 +266,6 @@ Item {
         return isNaN(time) ? 0 : time;
     }
 
-    function isImagePath(path) {
-        return /\.(jpe?g|png|webp|bmp)$/i.test(String(path || ""));
-    }
-
     function resetScanFolders() {
         root.scanFolders = root.folderPaths();
         rebuildPreviewTimer.restart();
@@ -276,15 +300,11 @@ Item {
                     }
                     continue;
                 }
-                if (!root.isImagePath(path))
+                if (!MediaUtils.isSupportedPath(path, cfg_IncludeImages, cfg_IncludeVideos))
                     continue;
 
                 seen[path] = true;
-                found.push({
-                    "path": path,
-                    "name": String(model.get(j, "fileName") || path),
-                    "modified": root.fileModifiedMs(model.get(j, "fileModified"))
-                });
+                found.push(MediaUtils.makeEntry(path, String(model.get(j, "fileName") || path), root.fileModifiedMs(model.get(j, "fileModified")), root.pathToUrl(path)));
             }
         }
         var mode = String(cfg_RotationMode || "name_asc");
@@ -301,9 +321,17 @@ Item {
             return a.name.localeCompare(b.name) || a.path.localeCompare(b.path);
         });
         previewImages.clear();
+        var images = 0;
+        var videos = 0;
         for (var k = 0; k < found.length; k++) {
             previewImages.append(found[k]);
+            if (found[k].kind === "video")
+                videos += 1;
+            else
+                images += 1;
         }
+        root.imageCount = images;
+        root.videoCount = videos;
         if (addedFolder)
             root.scanFolders = folders;
 
@@ -352,6 +380,8 @@ Item {
     implicitHeight: Kirigami.Units.gridUnit * 42
     onCfg_RotateSecondsChanged: syncRotatePartsFromConfig()
     onCfg_WallpaperPathsChanged: syncFolderModel()
+    onCfg_IncludeImagesChanged: rebuildPreviewTimer.restart()
+    onCfg_IncludeVideosChanged: rebuildPreviewTimer.restart()
     onCfg_RotationModeChanged: rebuildPreviewTimer.restart()
     Component.onCompleted: {
         syncRotatePartsFromConfig();
@@ -383,7 +413,7 @@ Item {
 
         delegate: FolderListModel {
             folder: root.pathToUrl(modelData)
-            nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp", "*.JPG", "*.JPEG", "*.PNG", "*.WEBP", "*.BMP"]
+            nameFilters: MediaUtils.nameFilters(cfg_IncludeImages, cfg_IncludeVideos)
             showDirs: true
             showFiles: true
             showHidden: false
@@ -405,14 +435,50 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        Kirigami.FormLayout {
-            id: settingsForm
+        QQC2.ScrollView {
+            id: settingsScroll
 
             Layout.fillWidth: true
-            Layout.leftMargin: Kirigami.Units.largeSpacing
-            Layout.rightMargin: Kirigami.Units.largeSpacing
-            Layout.topMargin: Kirigami.Units.largeSpacing
-            Layout.bottomMargin: Kirigami.Units.largeSpacing
+            Layout.fillHeight: true
+            Layout.minimumHeight: Kirigami.Units.gridUnit * 14
+            clip: true
+            contentWidth: availableWidth
+            contentHeight: settingsForm.implicitHeight + Kirigami.Units.largeSpacing * 2
+            QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+            QQC2.ScrollBar.vertical.policy: QQC2.ScrollBar.AsNeeded
+
+            Kirigami.FormLayout {
+                id: settingsForm
+
+                x: Kirigami.Units.largeSpacing
+                y: Kirigami.Units.largeSpacing
+                width: Math.max(0, settingsScroll.availableWidth - Kirigami.Units.largeSpacing * 2)
+                height: implicitHeight
+
+            Flow {
+                Kirigami.FormData.label: root.uiText("Images and videos") + ":"
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.CheckBox {
+                    text: root.uiText("Include images")
+                    checked: cfg_IncludeImages
+                    onToggled: cfg_IncludeImages = checked
+                }
+
+                QQC2.CheckBox {
+                    text: root.uiText("Include videos (experimental)")
+                    checked: cfg_IncludeVideos
+                    onToggled: cfg_IncludeVideos = checked
+                }
+            }
+
+            QQC2.Label {
+                Kirigami.FormData.label: ""
+                visible: cfg_IncludeVideos
+                color: Kirigami.Theme.disabledTextColor
+                text: root.uiText("Video audio is disabled. Videos play once, then advance.")
+                wrapMode: Text.WordWrap
+            }
 
             QQC2.ComboBox {
                 id: fillModeCombo
@@ -519,7 +585,7 @@ Item {
 
                 QQC2.Label {
                     color: Kirigami.Theme.disabledTextColor
-                    text: root.uiText("%1 images", root.imageCount)
+                    text: root.mediaCountText()
                 }
 
             }
@@ -972,18 +1038,22 @@ Item {
                 dialogTitle: root.uiText("Select Background Color")
             }
 
+            }
+
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 1
-            color: Kirigami.Theme.separatorColor
-        }
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 1
+                color: Kirigami.Theme.disabledTextColor
+                opacity: 0.35
+            }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 0
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.minimumHeight: Kirigami.Units.gridUnit * 14
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 20
+                spacing: 0
 
             ColumnLayout {
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 18
@@ -1075,7 +1145,8 @@ Item {
             Rectangle {
                 Layout.fillHeight: true
                 implicitWidth: 1
-                color: Kirigami.Theme.separatorColor
+                color: Kirigami.Theme.disabledTextColor
+                opacity: 0.35
             }
 
             ColumnLayout {
@@ -1089,7 +1160,7 @@ Item {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: root.uiText("Images")
+                        text: root.uiText("Images and videos")
                         font.weight: Font.DemiBold
                     }
 
@@ -1113,7 +1184,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         color: Kirigami.Theme.disabledTextColor
-                        text: root.uiText("No images found in the configured folders.")
+                        text: root.uiText("No media found in the configured folders.")
                     }
 
                     delegate: Item {
@@ -1129,17 +1200,55 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Math.round(width * 0.58)
                                 color: Kirigami.Theme.alternateBackgroundColor
-                                border.color: Kirigami.Theme.separatorColor
+                                border.color: Kirigami.Theme.disabledTextColor
                                 radius: Kirigami.Units.cornerRadius
 
                                 Image {
+                                    id: thumbnailImage
+
+                                    property var candidates: kind === "video" ? root.videoThumbnailUrls(path) : [root.pathToUrl(path)]
+                                    property int candidateIndex: 0
+
                                     anchors.fill: parent
                                     anchors.margins: 3
-                                    source: root.pathToUrl(path)
+                                    source: candidateIndex < candidates.length ? candidates[candidateIndex] : ""
+                                    visible: status === Image.Ready
                                     asynchronous: true
                                     cache: false
                                     fillMode: Image.PreserveAspectCrop
                                     smooth: true
+                                    onCandidatesChanged: candidateIndex = 0
+                                    onStatusChanged: {
+                                        if (status === Image.Error && candidateIndex + 1 < candidates.length)
+                                            candidateIndex += 1;
+                                    }
+                                }
+
+                                Kirigami.Icon {
+                                    anchors.centerIn: parent
+                                    width: Math.min(parent.width, parent.height) * 0.42
+                                    height: width
+                                    source: "video-symbolic"
+                                    visible: kind === "video" && thumbnailImage.status !== Image.Ready
+                                }
+
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: Kirigami.Units.smallSpacing
+                                    width: Kirigami.Units.gridUnit * 1.8
+                                    height: width
+                                    radius: width * 0.5
+                                    color: Qt.rgba(0, 0, 0, 0.58)
+                                    visible: kind === "video" && thumbnailImage.status === Image.Ready
+
+                                    Kirigami.Icon {
+                                        anchors.centerIn: parent
+                                        width: parent.width * 0.58
+                                        height: width
+                                        source: "media-playback-start"
+                                        color: "white"
+                                    }
                                 }
 
                             }
@@ -1160,7 +1269,6 @@ Item {
             }
 
         }
-
     }
 
 }

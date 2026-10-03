@@ -1,14 +1,16 @@
 # PlasmaWallShift Advanced 视频壁纸开发路线
 
-> 文档状态：设计草案  
-> 面向版本：建议 `v0.4.0` 首次提供实验性视频支持，稳定后再默认开放  
-> 当前基线：`v0.2.0` 之后的 `main` 分支  
+> 文档状态：`v0.4.0` 实验发布候选；首轮实现和混合媒体原型已在当前开发机通过
+> 面向版本：`v0.4.0` 首次提供实验性视频支持，稳定后再考虑默认开放
+> 设计基线：`v0.2.0`；当前实现状态见第 23、24 节
 > 适用平台：KDE Plasma 6、Qt 6.4 及以上、Wayland 优先  
 > 最后更新：2026-10-03
 
+> 对标调研：见 [`video-wallpaper-reference-study.md`](video-wallpaper-reference-study.md)。该文档分析了 Smart Video Wallpaper Reborn、Wallpaper Engine for KDE、linux-wallpaperengine、Fresco 及 Qt 6.4 官方 API；本路线已吸收其后端隔离、首帧检测、播放裁决、资源释放和性能经验。
+
 ## 1. 执行摘要
 
-WallShift Advanced 当前只扫描 JPG、JPEG、PNG、WebP 和 BMP，并使用两个 QML `Image` 图层完成预加载、双缓冲和 Shader 转场。视频支持不能通过简单增加扩展名实现，因为视频还涉及解码器、首帧就绪判断、播放生命周期、音频、视频结束事件、暂停恢复、双解码器资源占用和不同后端的兼容性。
+WallShift Advanced `v0.2.0` 只扫描 JPG、JPEG、PNG、WebP 和 BMP，并使用两个 QML `Image` 图层完成预加载、双缓冲和 Shader 转场。视频支持不能通过简单增加扩展名实现，因为视频还涉及解码器、首帧就绪判断、播放生命周期、音频、视频结束事件、暂停恢复、双解码器资源占用和不同后端的兼容性。
 
 推荐采用以下总体方案：
 
@@ -20,12 +22,14 @@ WallShift Advanced 当前只扫描 JPG、JPEG、PNG、WebP 和 BMP，并使用�
 6. 视频默认播放一次，播放结束后切换下一项；同时提供最长播放时长保护。
 7. 继续沿用“最后目标优先”的转场合并策略，不建立无限 FIFO 动画队列。
 8. 视频功能初始默认关闭，让旧配置、纯图片用户和缺少多媒体组件的系统保持原行为。
+9. `VideoSurface.qml` 作为明确的播放器后端边界；首版仅实现 QtMultimedia，但转场控制器不直接依赖其枚举。
+10. 所有暂停来源由单一播放裁决器归并，只在目标状态变化时调用播放器。
 
 首版应优先保证：不会崩溃、不会后台持续解码、不会产生音频、损坏视频可自动跳过、图片功能无回归。动态视频穿过所有 Shader 的效果可以放到后续版本。
 
 ---
 
-## 2. 当前实现基线
+## 2. `v0.2.0` 历史实现基线
 
 ### 2.1 当前扫描流程
 
@@ -99,7 +103,7 @@ WallShift Advanced 当前只扫描 JPG、JPEG、PNG、WebP 和 BMP，并使用�
 - 按显示器刷新率或节能状态限制帧率。
 - 视频音频显式开启、音量和淡入淡出。
 - 动态视频 Shader 转场，即转场时两端视频继续播放。
-- 视频缩略图缓存。
+- 缓存缺失时主动生成视频缩略图。
 - 按分辨率、时长、方向、编码过滤。
 - 活动、虚拟桌面或显示器之间共享播放进度。
 
@@ -176,7 +180,8 @@ WallShift Advanced 当前只扫描 JPG、JPEG、PNG、WebP 和 BMP，并使用�
 
 首版强制：
 
-- `AudioOutput.muted: true`，或者不创建可输出音频的 `AudioOutput`。
+- 优先设置 `MediaPlayer.activeAudioTrack: -1`，从源头禁用音轨。
+- 默认不连接 `AudioOutput`；若特定后端必须创建，则同时使用 `AudioOutput.muted: true` 和 `volume: 0`。
 - 配置页明确显示“视频壁纸默认静音”。
 - 切换、暂停、错误和清理时确保不会残留音频。
 
@@ -301,8 +306,10 @@ import QtMultimedia
 import QtQuick
 
 Item {
-    MediaPlayer { /* source、状态和生命周期 */ }
-    AudioOutput { muted: true }
+    MediaPlayer {
+        activeAudioTrack: -1
+        /* source、状态和生命周期；显式 play() */
+    }
     VideoOutput { /* fillMode、orientation、videoSink */ }
 }
 ```
@@ -317,7 +324,15 @@ Item {
 - `EndOfMedia`
 - `VideoOutput.videoSink` 的首帧信号
 
-首帧就绪不能只看 `LoadedMedia`，因为“媒体已加载”不一定表示 GPU 上已经有可显示的视频帧。推荐优先监听 `videoSink.videoFrameChanged`，收到第一个有效帧后设置 `firstFrameReady`。必须在 Qt 6.4 上验证该信号能否稳定从 QML 使用；若兼容性不足，回退到“已缓冲且开始播放后 position 发生变化”并加超时保护。
+`VideoSurface.qml` 同时是后端适配边界。它对外暴露项目自己的 `readyForTransition`、`playbackEnded`、`loadFailed` 和播放控制接口，上层不得直接读取 QtMultimedia 枚举。未来只有在 QtMultimedia 出现无法规避的问题时，才评估增加 mpv 后端。
+
+首帧就绪不能只看 `LoadedMedia` 或 `BufferedMedia`，因为“媒体已加载/缓冲”不一定表示 GPU 上已经有可显示的视频帧。采用以下分层策略：
+
+1. 优先监听 `videoSink.videoFrameChanged`，收到第一个有效 `QVideoFrame` 后设置 `firstFrameReady`。
+2. 若目标 Qt 6.4 环境无法可靠从 QML 接收该信号，以显式开始播放后 `position > 0` 作为兼容回退。
+3. 两条路径都必须受首帧超时保护；超时后停止、清源并报告失败。
+
+Qt 6.4 官方 QML 文档包含 `videoSink`、`activeAudioTrack` 和 `playbackState`，但没有较新 Qt 代码常用的 `MediaPlayer.autoPlay` 与 `playing`。最低版本实现必须显式调用 `play()`，并以 `playbackState === MediaPlayer.PlayingState` 判断状态。
 
 ### 5.4 重构 `WallpaperTransition.qml`
 
@@ -583,6 +598,17 @@ function requestNext(reason) {
 - 当前媒体是图片时不创建视频解码器。
 - 设置页打开不应重复创建桌面播放器。
 
+播放控制采用单一裁决器，而不是让可见性、锁屏、转场和用户操作分别直接调用 `play()`/`pause()`：
+
+```text
+desiredPlaying = activeSlot
+              && mediaKind == video
+              && phase == playing
+              && pauseReasons is empty
+```
+
+每个视频槽保存 `desiredPlaybackState`、`appliedPlaybackState` 和 `sourceGeneration`。只有目标状态发生变化且 generation 仍匹配时才向后端下发命令。
+
 ### 10.2 非活动槽位
 
 - 只在即将切换时加载下一项。
@@ -608,6 +634,8 @@ function requestNext(reason) {
 - Plasma Shell 销毁组件时播放器必须随对象销毁停止。
 
 若 `visible` 不能准确反映桌面是否被覆盖，不要为了“窗口覆盖就暂停”引入高频窗口监控。首版只处理能够可靠获得的生命周期事件。
+
+最大化/全屏窗口、电池阈值和桌面效果联动已被成熟项目证明可行，但涉及 TaskManager、PowerDevil、屏幕状态或 Wayland 协议。它们应在基础播放稳定后独立加入，不能阻塞 `v0.4.0`。
 
 ### 10.4 休眠与恢复
 
@@ -712,6 +740,8 @@ Plasma 会为每个桌面/屏幕创建独立壁纸实例，因此首版采用每
 4. 视频解码失败 → 跳过视频并继续图片。
 
 首版不建议自动修改视频分辨率或调用外部转码器。
+
+也不要未经测量就加入软件 `fps` 过滤或定时丢帧。参考项目的实测经验表明，此类处理可能迫使硬件帧回读并提高而非降低功耗。首版保持后端默认帧路径，优化必须同时观察 CPU、GPU 视频引擎、GPU 渲染引擎和整机功耗。
 
 ### 13.4 可观测指标
 
@@ -848,16 +878,21 @@ depends+=(qt6-multimedia)
 任务：
 
 - 建立最小 `MediaPlayer + VideoOutput` 原型。
+- 确认原型严格使用 Qt 6.4 API：显式 `play()`、读取 `playbackState`，不使用 `autoPlay` 或 `playing`。
 - 验证本地 MP4/WebM 播放。
-- 验证首帧检测。
+- 验证 `videoSink.videoFrameChanged → position > 0 → timeout` 的分层首帧检测。
+- 用 `activeAudioTrack: -1` 验证带音轨视频不会产生声音或意外音频会话。
 - 验证 `VideoOutput` 能被 `ShaderEffectSource` 捕获。
 - 验证暂停后冻结帧仍可参与所有现有 Shader。
+- 若直接捕获失败，验证一次性图像快照代理和普通 opacity 淡入淡出的降级可行性。
 - 验证两个播放器短时共存的资源行为。
+- 验证 `stop()`、清空 source、销毁 Loader 后解码活动消失。
 - 验证 Plasma 壁纸上下文，而不仅是独立 `qml6` 窗口。
 
 退出条件：
 
 - 至少一种常见 MP4 和一种 WebM 可播放。
+- 带音轨样本始终静音。
 - 图片 → 视频和视频 → 图片无黑帧。
 - 无法 Shader 捕获时有明确可实施的淡入淡出降级方案。
 
@@ -964,7 +999,7 @@ depends+=(qt6-multimedia)
 ### 阶段 7：增强功能
 
 - 动态视频 Shader。
-- 视频缩略图缓存。
+- 缓存缺失时主动生成视频缩略图。
 - 视频音频可选支持。
 - 片段起止点和播放速度。
 - 更完整的节能策略。
@@ -1005,10 +1040,13 @@ depends+=(qt6-multimedia)
 | 视频结束与定时器重复触发 | 一次跳两项 | 根据模式只启用一个主触发源 |
 | 旧播放器延迟事件 | 错误切换 | generation token |
 | 快速连续切换 | 状态错位 | 最后目标优先、状态机测试 |
-| 设置页视频预览过多 | 高资源占用 | 首版只显示图标和文本 |
+| 设置页视频预览过多 | 高资源占用 | 只读取 KDE 静态缩略图缓存，缺失时显示图标 |
 | QtMultimedia 缺失 | 插件加载失败 | 动态 Loader 隔离或硬依赖 |
 | 视频音频意外播放 | 严重体验问题 | 首版强制静音并测试 |
 | 休眠恢复后管线失效 | 黑屏/卡住 | 恢复检查并允许重载一次 |
+| 使用较新 Qt QML 属性 | Qt 6.4 加载失败 | 禁用 `autoPlay`/`playing`，按最低版本实机验证 |
+| 多暂停来源互相覆盖 | 被锁定/隐藏时错误复播 | 单一播放裁决器、desired/applied 去重 |
+| 盲目限帧破坏硬件路径 | 功耗反而上升 | 不默认限帧；按视频引擎、渲染引擎和整机功耗测量 |
 
 ---
 
@@ -1048,6 +1086,14 @@ depends+=(qt6-multimedia)
 8. Tile 模式对视频的回退应为裁剪铺满还是保持比例？推荐裁剪铺满。
 9. 缺少 Qt Multimedia 时，是禁用视频还是把模块设为硬依赖？推荐正式发布时硬依赖，同时保留动态加载边界。
 
+源码调研和 Qt 6.4 文档已经锁定以下结论，不再作为开放设计项：
+
+- Qt 6.4 提供 `VideoOutput.videoSink`，但其 QML 信号可用性仍需在阶段 0 实机验证。
+- Qt 6.4 基线不得使用 `MediaPlayer.autoPlay` 和 `playing`；使用显式 `play()` 与 `playbackState`。
+- 首版通过 `activeAudioTrack: -1` 禁用音轨，并以无 `AudioOutput` 或强制静音作为后端兼容策略。
+- 当前参考 mpv/`QQuickRhiItem` 后端要求 Qt 6.7+，不能作为本项目 Qt 6.4 首版实现。
+- 播放暂停必须由单一裁决器归并，不能由多个事件处理器直接互相覆盖。
+
 这些问题应由原型和实际测试回答，而不是仅凭 API 文档假设。
 
 ---
@@ -1064,3 +1110,61 @@ depends+=(qt6-multimedia)
 6. 记录 Qt 版本、图形后端、GPU、视频编码、CPU/GPU 占用和所有错误日志。
 
 只有该原型证明视频纹理路径可靠后，才开始重构扫描和双缓冲。这样可以在投入大规模改造前尽早暴露最关键的技术风险。
+
+---
+
+## 22. 参考资料
+
+- [`video-wallpaper-reference-study.md`](video-wallpaper-reference-study.md)：本项目的源码级对标分析、采用/拒绝理由和 Go / No-Go 门槛。
+- [Smart Video Wallpaper Reborn](https://github.com/luisbocanegra/plasma-smart-video-wallpaper-reborn)
+- [Wallpaper Engine for KDE](https://github.com/RainyPixel/wallpaper-engine-kde-plugin)
+- [linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)
+- [Fresco](https://github.com/DibbayajyotiRoy/Fresco)
+- [Qt 6.4 VideoOutput QML Type](https://doc.qt.io/archives/qt-6.4/qml-qtmultimedia-videooutput.html)
+- [Qt 6.4 MediaPlayer QML Type](https://doc.qt.io/archives/qt-6.4/qml-qtmultimedia-mediaplayer.html)
+
+---
+
+## 23. 2026-10-03 原型与首轮实现结果
+
+当前开发机环境为 Plasma 6.7.5、Qt 6.11.2、Qt Multimedia FFmpeg 后端 n9.0.2。以下结论均已通过可重复脚本验证：
+
+- `tools/run-video-prototype.sh`：在独立 QML 窗口分别验证 H.264/AAC MP4 与 VP9/Opus WebM。
+- `tools/run-video-plasma-prototype.sh`：将同一场景临时安装为独立 Plasma 壁纸包，在真实 `plasmashell` 中验证后自动恢复桌面并卸载测试包。
+- `tools/run-media-integration-prototype.sh`：验证正式 `main.qml`、统一媒体扫描、双 `MediaSlot`、自然结束切换、latest-wins、损坏视频恢复和单视频循环。
+
+已确认：
+
+1. `videoSink.videoFrameChanged` 可用于当前环境的首帧检测，测试样本均在 `position == 0` 时先收到可显示帧。
+2. MP4 与 WebM 均能在图片/视频统一双槽中预加载；图片 → 视频、视频 → 图片和视频 → 视频可完成转场。
+3. Fade 以及 Simple、Wipe、Wave、Grow、Outer、Stripes、Pixelate、Iris、Portal 全部能从暂停的视频帧取得非黑纹理。
+4. 带音轨样本的 `activeAudioTrack` 最终保持 `-1`；同时连接 `muted: true`、`volume: 0` 的 `AudioOutput`。实测只禁用音轨而完全不连接音频输出时，当前 FFmpeg 后端曾错误地快速推进播放位置，因此保留双重静音保护。
+5. 轨道发现时后端可能把 `activeAudioTrack` 暂时重置为 `0`，实现必须在 `tracksChanged` 与 `activeTracksChanged` 后再次设为 `-1`。
+6. 清空 source 后 `mediaStatus` 会进入 `NoMedia`，但当前后端的 `playbackState` 仍可能停留在 `PausedState`；资源释放判断不能只依赖 `playbackState`。
+7. 4 秒测试视频可在结束前冻结末帧并自动切换下一项；只有一个可播放视频时会从头重播。
+8. 视频播放期间连续三次切换只执行当前转场和最后目标，不积压完整动画队列。
+9. 正在加载的损坏视频即使失败，也不会丢弃随后到达的最终目标；损坏源会清空并加入本轮失败集合。
+
+尚未关闭的发布门槛：
+
+- 当前代码只按 Qt 6.4 官方 API 编写并通过 Qt 6.11.2 静态/实机测试，仍需在真正的 Qt 6.4 运行环境执行同一组脚本。
+- 仍需补充长时间循环、休眠恢复、锁屏/解锁、多屏独立实例和不同图形后端测试。
+- 仍需测量双播放器短时共存时的 CPU、GPU 视频引擎、显存和整机功耗，不能仅凭非黑帧测试判断性能达标。
+
+---
+
+## 24. 2026-10-03 发布候选审计
+
+已完成：
+
+- 将 helper、systemd unit 和 KWin 脚本移出 Plasma Wallpaper 包，KDE Store 归档现在只有一个 `metadata.json`，不再触发嵌套 KPackage 类型警告。
+- 版本、Changelog、本地 Arch 配方和 KDE Store 提交文案已更新为 `0.4.0`。
+- 增加可复现归档、包边界检查、systemd unit 校验和 AppStream 严格验证的 `make release-check`。
+- 修复 Plasma 6 配置宿主属性及 Kirigami 主题颜色兼容警告；实机重新打开设置页后未发现 WallShift QML 错误。
+- `make release-check`、本地 Arch 包构建和正式混合媒体集成原型均已通过。
+
+分发前仍需选择：
+
+- 若继续声明最低 Qt 6.4，应先在真正的 Qt 6.4 环境执行三套原型；否则必须把发布说明明确标注为仅在 Qt 6.11.2 实测。
+- GitHub tag/Release 创建后，再用真实 GitHub 源码归档校验值更新稳定版 AUR 配方。
+- KDE Store 需要登录后手动创建产品；其归档不包含可选的 `Meta+F5` companion。

@@ -106,7 +106,7 @@ ColumnLayout {
             ctx.fillStyle = Kirigami.Theme.backgroundColor;
             ctx.fillRect(0, 0, width, height);
             ctx.lineWidth = 1;
-            ctx.strokeStyle = Kirigami.Theme.separatorColor;
+            ctx.strokeStyle = Kirigami.Theme.disabledTextColor;
             for (var i = 0; i <= 6; ++i) {
                 var gridValueX = chart.minimumX + i * 0.5;
                 var gridX = root.chartX(gridValueX);

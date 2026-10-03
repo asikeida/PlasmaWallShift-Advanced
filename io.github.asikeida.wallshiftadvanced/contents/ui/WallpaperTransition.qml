@@ -6,23 +6,11 @@ import "EasingUtils.js" as EasingUtils
 import QtQuick
 
 Item {
-    // ---- image layers ----
-    // ---- shader overlay (lazy-loaded) ----
-    // ---- image status handler ----
-    // ---- public API ----
-    // ---- clear ----
-    // ---- immediate show ----
-    // ---- begin transition ----
-    // ---- crossfade (type 1) ----
-    // ---- shader transition (types 2-6) ----
-    // ---- abort ----
-    // ---- crossfade animations ----
-    // ---- connection to loader item ----
-
     id: root
 
     property int fillMode: Image.PreserveAspectCrop
     property size sourceSize: Qt.size(0, 0)
+    property bool playbackEnabled: true
     property int duration: 400
     property int transitionType: 1
     property int transitionDuration: 400
@@ -44,24 +32,61 @@ Item {
     property real irisScale: 0.2
     property real portalTwist: 1.2
     readonly property var easingCurve: EasingUtils.curve(easingMode, bezierX1, bezierY1, bezierX2, bezierY2)
+    readonly property string currentKind: s.currentEntry ? String(s.currentEntry.kind || "image") : "none"
+    readonly property string currentPath: _entryKey(s.currentEntry)
 
     signal imageReady()
     signal imageError()
+    signal mediaError(string path, string reason)
+    signal playbackEnded(string path)
 
-    function _handleStatus(layer, status) {
-        if (s.running && s.activeLayer !== layer && status === Image.Ready) {
+    function _entryKey(entry) {
+        return entry ? String(entry.path || entry.url || "") : "";
+    }
+
+    function _normalizedEntry(entry) {
+        if (!entry)
+            return null;
+        if (typeof entry === "string") {
+            return {
+                "path": entry,
+                "url": entry,
+                "kind": "image"
+            };
+        }
+        return {
+            "path": String(entry.path || entry.url || ""),
+            "url": String(entry.url || entry.path || ""),
+            "kind": String(entry.kind || "image"),
+            "name": String(entry.name || entry.path || "")
+        };
+    }
+
+    function _handleReady(layer) {
+        if (s.running && s.activeLayer !== layer) {
             if (s.effectiveShaderType === 0)
                 _finishInstantTransition(layer);
             else if (s.useShader)
                 _doShaderTransition();
             else
                 _doCrossfade(layer);
-        } else if (s.running && s.activeLayer !== layer && status === Image.Error)
-            _abort();
-        else if (!s.running && s.activeLayer === layer && status === Image.Ready)
+        } else if (!s.running && s.activeLayer === layer) {
             root.imageReady();
-        else if (!s.running && status === Image.Error)
+        }
+    }
+
+    function _handleError(layer, reason) {
+        if (s.running && s.activeLayer !== layer)
+            _abort(reason);
+        else if (!s.running && s.activeLayer === layer) {
+            root.mediaError(root.currentPath, reason);
             root.imageError();
+        }
+    }
+
+    function _handlePlaybackEnded(layer) {
+        if (!s.running && s.activeLayer === layer)
+            root.playbackEnded(root.currentPath);
     }
 
     function _finishInstantTransition(newLayer) {
@@ -69,86 +94,95 @@ Item {
     }
 
     function setImage(source, immediate) {
-        if (!source) {
+        setMedia({
+            "path": String(source || ""),
+            "url": String(source || ""),
+            "kind": "image"
+        }, immediate);
+    }
+
+    function setMedia(entry, immediate) {
+        var normalized = _normalizedEntry(entry);
+        var key = _entryKey(normalized);
+        if (!key) {
             _clear();
-            return ;
+            return;
         }
-        if (immediate || !s.currentSource)
-            _showImmediate(source);
-        else if (s.running) {
-            // Keep only the latest requested destination. Selecting the image
-            // already entering cancels any previously queued follow-up, while
-            // selecting the outgoing image queues a return after completion.
-            s.queuedSource = source === s.pendingSource ? "" : source;
-        } else if (source === s.currentSource)
-            return ;
+        if (immediate || !root.currentPath)
+            _showImmediate(normalized);
+        else if (s.running)
+            s.queuedEntry = key === _entryKey(s.pendingEntry) ? null : normalized;
+        else if (key !== root.currentPath)
+            _beginTransition(normalized);
+    }
+
+    function restartActiveVideo() {
+        if (s.activeLayer === "a")
+            slotA.restartVideo();
         else
-            _beginTransition(source);
+            slotB.restartVideo();
     }
 
     function _clear() {
         _stopAll();
         s.running = false;
-        s.currentSource = "";
-        s.pendingSource = "";
-        s.queuedSource = "";
+        s.animating = false;
+        s.currentEntry = null;
+        s.pendingEntry = null;
+        s.queuedEntry = null;
         s.activeLayer = "a";
         s.useShader = false;
-        imageB.source = "";
-        imageB.opacity = 0;
-        imageA.source = "";
-        imageA.opacity = 1;
+        slotB.unload();
+        slotB.opacity = 0;
+        slotA.unload();
+        slotA.opacity = 1;
         shaderLoader.active = false;
     }
 
-    function _showImmediate(source) {
+    function _showImmediate(entry) {
         _stopAll();
         s.running = false;
+        s.animating = false;
         s.useShader = false;
-        s.currentSource = source;
-        s.pendingSource = "";
-        s.queuedSource = "";
+        s.currentEntry = entry;
+        s.pendingEntry = null;
+        s.queuedEntry = null;
         s.activeLayer = "a";
         shaderLoader.active = false;
-        imageB.source = "";
-        imageB.opacity = 0;
-        imageA.source = source;
-        imageA.opacity = 1;
+        slotB.unload();
+        slotB.opacity = 0;
+        slotA.opacity = 1;
+        slotA.load(entry);
     }
 
-    function _beginTransition(source) {
+    function _beginTransition(entry) {
         s.running = true;
-        s.pendingSource = source;
+        s.animating = false;
+        s.pendingEntry = entry;
         var effectiveType = root.transitionType;
-        if (effectiveType === 7) {
+        if (effectiveType === 7)
             effectiveType = _pickRandom();
-            s.effectiveShaderType = effectiveType;
-        } else {
-            s.effectiveShaderType = effectiveType;
-        }
-        // Resolve per-effect angle
+        s.effectiveShaderType = effectiveType;
         s.effectiveAngle = 0;
         if (effectiveType === 3)
             s.effectiveAngle = root.wipeAngle;
-
-        if (effectiveType === 4)
+        else if (effectiveType === 4)
             s.effectiveAngle = root.waveAngle;
-
-        if (effectiveType === 8)
+        else if (effectiveType === 8)
             s.effectiveAngle = root.stripeAngle;
-
         s.effectiveOrigin = root.transitionOrigin;
         s.useShader = effectiveType !== 0 && effectiveType !== 1;
         if (s.activeLayer === "a") {
-            imageB.source = source;
-            imageB.opacity = 0;
+            slotB.opacity = 0;
+            slotB.load(entry);
         } else {
-            imageA.source = source;
-            imageA.opacity = 0;
+            slotA.opacity = 0;
+            slotA.load(entry);
         }
     }
 
     function _doCrossfade(newLayer) {
+        s.animating = true;
         if (newLayer === "a")
             fadeA.start();
         else
@@ -156,13 +190,14 @@ Item {
     }
 
     function _doShaderTransition() {
-        var oldImage = s.activeLayer === "a" ? imageA : imageB;
-        var newImage = s.activeLayer === "a" ? imageB : imageA;
-        imageA.opacity = 1;
-        imageB.opacity = 1;
+        s.animating = true;
+        var oldSlot = s.activeLayer === "a" ? slotA : slotB;
+        var newSlot = s.activeLayer === "a" ? slotB : slotA;
+        slotA.opacity = 1;
+        slotB.opacity = 1;
         shaderLoader.setSource(Qt.resolvedUrl("ShaderTransitionOverlay.qml"), {
-            "oldSourceItem": oldImage,
-            "newSourceItem": newImage,
+            "oldSourceItem": oldSlot,
+            "newSourceItem": newSlot,
             "transitionType": s.effectiveShaderType,
             "transitionDuration": root.transitionDuration,
             "transitionAngle": s.effectiveAngle,
@@ -181,99 +216,90 @@ Item {
 
     function _finishShaderTransition() {
         shaderLoader.active = false;
-        var newActive = s.activeLayer === "a" ? "b" : "a";
-        _completeTransition(newActive);
+        _completeTransition(s.activeLayer === "a" ? "b" : "a");
     }
 
     function _pickRandom() {
-        // Bits map to fade, simple, wipe, wave, grow, outer, stripes,
-        // pixelate, iris and portal, respectively.
         var pool = [];
         var mask = root.randomPool;
         if (mask & 1)
             pool.push(1);
-
         if (mask & 2)
             pool.push(2);
-
         if (mask & 4)
             pool.push(3);
-
         if (mask & 8)
             pool.push(4);
-
         if (mask & 16)
             pool.push(5);
-
         if (mask & 32)
             pool.push(6);
-
         if (mask & 64)
             pool.push(8);
-
         if (mask & 128)
             pool.push(9);
-
         if (mask & 256)
             pool.push(10);
-
         if (mask & 512)
             pool.push(11);
-
-        if (pool.length === 0)
-            return 1;
-
-        return pool[Math.floor(Math.random() * pool.length)];
+        return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : 1;
     }
 
     function _completeTransition(newActive) {
+        var oldSlot = newActive === "a" ? slotB : slotA;
         s.activeLayer = newActive;
-        s.currentSource = s.pendingSource;
-        s.pendingSource = "";
+        s.currentEntry = s.pendingEntry;
+        s.pendingEntry = null;
         s.running = false;
+        s.animating = false;
+        oldSlot.unload();
         if (newActive === "a") {
-            imageB.source = "";
-            imageB.opacity = 0;
-            imageA.opacity = 1;
+            slotB.opacity = 0;
+            slotA.opacity = 1;
         } else {
-            imageA.source = "";
-            imageA.opacity = 0;
-            imageB.opacity = 1;
+            slotA.opacity = 0;
+            slotB.opacity = 1;
         }
         root.imageReady();
         _startQueuedTransition();
     }
 
     function _startQueuedTransition() {
-        var nextSource = s.queuedSource;
-        s.queuedSource = "";
-        if (!nextSource || nextSource === s.currentSource)
-            return ;
-
+        var nextEntry = s.queuedEntry;
+        s.queuedEntry = null;
+        if (!nextEntry || _entryKey(nextEntry) === root.currentPath)
+            return;
         Qt.callLater(function() {
-            root._beginTransition(nextSource);
+            root._beginTransition(nextEntry);
         });
     }
 
-    function _abort() {
+    function _abort(reason) {
+        var failedPath = _entryKey(s.pendingEntry);
+        var nextEntry = s.queuedEntry;
         _stopAll();
         s.running = false;
-        s.pendingSource = "";
+        s.animating = false;
+        s.pendingEntry = null;
+        s.queuedEntry = null;
         s.useShader = false;
         shaderLoader.active = false;
         if (s.activeLayer === "a") {
-            imageB.source = "";
-            imageB.opacity = 0;
-            imageA.opacity = 1;
+            slotB.unload();
+            slotB.opacity = 0;
+            slotA.opacity = 1;
         } else {
-            imageA.source = "";
-            imageA.opacity = 0;
-            imageB.opacity = 1;
+            slotA.unload();
+            slotA.opacity = 0;
+            slotB.opacity = 1;
         }
-        if (s.queuedSource)
-            _startQueuedTransition();
-        else
-            root.imageError();
+        root.mediaError(failedPath, reason);
+        root.imageError();
+        if (nextEntry && _entryKey(nextEntry) !== root.currentPath) {
+            Qt.callLater(function() {
+                root._beginTransition(nextEntry);
+            });
+        }
     }
 
     function _stopAll() {
@@ -281,51 +307,53 @@ Item {
         fadeB.stop();
         if (shaderLoader.item)
             shaderLoader.item.stop();
-
     }
 
     QtObject {
         id: s
 
         property string activeLayer: "a"
-        property string currentSource: ""
-        property string pendingSource: ""
-        property string queuedSource: ""
+        property var currentEntry: null
+        property var pendingEntry: null
+        property var queuedEntry: null
         property bool running: false
+        property bool animating: false
         property bool useShader: false
         property int effectiveShaderType: 2
         property real effectiveAngle: 0
         property point effectiveOrigin: Qt.point(0.5, 0.5)
     }
 
-    Image {
-        id: imageA
+    MediaSlot {
+        id: slotA
 
         anchors.fill: parent
         fillMode: root.fillMode
         sourceSize: root.sourceSize
-        asynchronous: true
-        cache: false
-        autoTransform: true
-        smooth: true
+        activePlayback: root.playbackEnabled && s.activeLayer === "a" && !s.animating
         opacity: 1
         z: 0
-        onStatusChanged: _handleStatus("a", status)
+        onLoadFailed: function(reason) {
+            root._handleError("a", reason);
+        }
+        onPlaybackEnded: root._handlePlaybackEnded("a")
+        onReadyForTransition: root._handleReady("a")
     }
 
-    Image {
-        id: imageB
+    MediaSlot {
+        id: slotB
 
         anchors.fill: parent
         fillMode: root.fillMode
         sourceSize: root.sourceSize
-        asynchronous: true
-        cache: false
-        autoTransform: true
-        smooth: true
+        activePlayback: root.playbackEnabled && s.activeLayer === "b" && !s.animating
         opacity: 0
         z: 1
-        onStatusChanged: _handleStatus("b", status)
+        onLoadFailed: function(reason) {
+            root._handleError("b", reason);
+        }
+        onPlaybackEnded: root._handlePlaybackEnded("b")
+        onReadyForTransition: root._handleReady("b")
     }
 
     Loader {
@@ -339,12 +367,10 @@ Item {
     ParallelAnimation {
         id: fadeA
 
-        onFinished: {
-            root._completeTransition("a");
-        }
+        onFinished: root._completeTransition("a")
 
         NumberAnimation {
-            target: imageB
+            target: slotB
             property: "opacity"
             to: 0
             duration: root.transitionDuration
@@ -353,25 +379,22 @@ Item {
         }
 
         NumberAnimation {
-            target: imageA
+            target: slotA
             property: "opacity"
             to: 1
             duration: root.transitionDuration
             easing.type: Easing.BezierSpline
             easing.bezierCurve: root.easingCurve
         }
-
     }
 
     ParallelAnimation {
         id: fadeB
 
-        onFinished: {
-            root._completeTransition("b");
-        }
+        onFinished: root._completeTransition("b")
 
         NumberAnimation {
-            target: imageA
+            target: slotA
             property: "opacity"
             to: 0
             duration: root.transitionDuration
@@ -380,25 +403,21 @@ Item {
         }
 
         NumberAnimation {
-            target: imageB
+            target: slotB
             property: "opacity"
             to: 1
             duration: root.transitionDuration
             easing.type: Easing.BezierSpline
             easing.bezierCurve: root.easingCurve
         }
-
     }
 
     Connections {
-        id: shaderConns
-
-        function onFinished() {
-            _finishShaderTransition();
-        }
-
         target: shaderLoader.item
         enabled: shaderLoader.item !== null
-    }
 
+        function onFinished() {
+            root._finishShaderTransition();
+        }
+    }
 }

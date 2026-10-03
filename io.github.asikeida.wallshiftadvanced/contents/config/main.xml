@@ -10,6 +10,14 @@
       <label>Local wallpaper folders, one per line</label>
       <default></default>
     </entry>
+    <entry name="IncludeImages" type="Bool">
+      <label>Include still images from wallpaper folders</label>
+      <default>true</default>
+    </entry>
+    <entry name="IncludeVideos" type="Bool">
+      <label>Include local video files from wallpaper folders</label>
+      <default>false</default>
+    </entry>
     <entry name="RotationMode" type="String">
       <label>Wallpaper rotation order</label>
       <default>name_asc</default>
@@ -112,6 +120,10 @@
     </entry>
     <entry name="CurrentImage" type="String">
       <label>Current wallpaper file</label>
+      <default></default>
+    </entry>
+    <entry name="CurrentMedia" type="String">
+      <label>Current image or video wallpaper file</label>
       <default></default>
     </entry>
     <entry name="CurrentIndex" type="Int">
