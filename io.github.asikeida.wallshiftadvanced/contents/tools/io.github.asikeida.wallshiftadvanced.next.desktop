@@ -1,0 +1,8 @@
+[Desktop Entry]
+Exec=wallshift-next
+Name=WallShift Advanced — Next Wallpaper
+Name[zh_CN]=WallShift 高级版 — 下一张壁纸
+NoDisplay=true
+StartupNotify=false
+Type=Application
+X-KDE-GlobalAccel-CommandShortcut=true

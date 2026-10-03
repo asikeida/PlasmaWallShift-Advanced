@@ -7,6 +7,10 @@ QMLLINT ?= $(shell command -v qmllint6 2>/dev/null || test ! -x /usr/lib/qt6/bin
 QMLLINT := $(if $(QMLLINT),$(QMLLINT),qmllint)
 QMLLINT_FLAGS := --unqualified disable --missing-property disable --unused-imports disable
 SHADER_DIR := $(PLUGIN)/contents/ui/shaders
+HELPER := $(PLUGIN)/contents/tools/wallshift-next
+HELPER_DESKTOP := $(PLUGIN)/contents/tools/io.github.asikeida.wallshiftadvanced.next.desktop
+USER_BIN ?= $(HOME)/.local/bin
+USER_APPLICATIONS ?= $(HOME)/.local/share/applications
 SHADERS := crossfade simple wipe wave grow outer stripes pixelate iris portal
 PO := po/zh_CN/io.github.asikeida.wallshiftadvanced.po
 MO := $(PLUGIN)/contents/locale/zh_CN/LC_MESSAGES/plasma_wallpaper_io.github.asikeida.wallshiftadvanced.mo
@@ -33,9 +37,13 @@ dist: check
 
 install:
 	kpackagetool6 --type Plasma/Wallpaper --install $(PLUGIN)
+	install -Dm755 $(HELPER) $(USER_BIN)/wallshift-next
+	install -Dm644 $(HELPER_DESKTOP) $(USER_APPLICATIONS)/io.github.asikeida.wallshiftadvanced.next.desktop
 
 upgrade:
 	kpackagetool6 --type Plasma/Wallpaper --upgrade $(PLUGIN)
+	install -Dm755 $(HELPER) $(USER_BIN)/wallshift-next
+	install -Dm644 $(HELPER_DESKTOP) $(USER_APPLICATIONS)/io.github.asikeida.wallshiftadvanced.next.desktop
 
 clean:
 	rm -f $(SHADER_DIR)/*.qsb $(ARCHIVE)

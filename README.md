@@ -15,6 +15,7 @@ WallShift Advanced is a KDE Plasma 6 wallpaper plugin for rotating local wallpap
 - Centered, random, custom or global mouse-cursor origins for radial transitions. Cursor origin uses `kdotool` on KDE Wayland.
 - Configurable random-effect pool.
 - Double-buffered image loading and latest-request queuing during active transitions.
+- `wallshift-next` command for reliable KDE global-shortcut integration on Wayland.
 
 ![WallShift Advanced settings with the extended Bézier editor](screenshots/settings-en.png)
 
@@ -59,6 +60,12 @@ systemctl --user start plasma-plasmashell.service
 ```
 
 The migration tool creates a timestamped backup of Plasma's desktop configuration before writing it.
+
+## Global shortcut
+
+`make install`, `make upgrade`, and the Arch package install the `wallshift-next` helper. It advances every desktop currently using WallShift Advanced while leaving other wallpaper plugins unchanged.
+
+On Plasma 6, bind the command through **System Settings → Keyboard → Shortcuts → Add New → Command or Script**. Enter `wallshift-next` as the command, choose a shortcut, and apply the change. Using the System Settings page is more reliable on Wayland than editing `kglobalshortcutsrc` directly.
 
 ## Build shaders
 

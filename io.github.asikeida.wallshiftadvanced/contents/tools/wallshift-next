@@ -1,0 +1,13 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+set -eu
+
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    echo "wallshift-next: XDG_RUNTIME_DIR is not set" >&2
+    exit 1
+fi
+
+umask 077
+rm -f "$XDG_RUNTIME_DIR"/wallshift-advanced-next-*
+: > "$XDG_RUNTIME_DIR/wallshift-advanced-next-$$-$(date +%s%N)"

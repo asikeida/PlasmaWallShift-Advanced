@@ -20,6 +20,7 @@ WallpaperItem {
     property string statusText: ""
     property string pendingCursorSource: ""
     property bool cursorLookupRunning: false
+    property bool nextTriggerWatcherReady: false
     readonly property string cursorLookupCommand: "kdotool getmouselocation --shell"
     property var zhText: ({
         "Move to Trash": "移到回收站",
@@ -459,6 +460,33 @@ WallpaperItem {
         }
 
         target: root.configuration
+    }
+
+    FolderListModel {
+        id: nextTriggerModel
+
+        folder: root.pathToUrl(StandardPaths.writableLocation(StandardPaths.RuntimeLocation))
+        nameFilters: ["wallshift-advanced-next-*"]
+        showDirs: false
+        showFiles: true
+        showHidden: true
+    }
+
+    Instantiator {
+        model: nextTriggerModel
+        onObjectAdded: function(index, object) {
+            if (root.nextTriggerWatcherReady && root.images.length > 1)
+                root.rotateNext(false);
+        }
+
+        delegate: QtObject {}
+    }
+
+    Timer {
+        interval: 1000
+        running: true
+        repeat: false
+        onTriggered: root.nextTriggerWatcherReady = true
     }
 
     Rectangle {

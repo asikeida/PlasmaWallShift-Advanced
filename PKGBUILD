@@ -18,6 +18,11 @@ package() {
   cp -a "$startdir/io.github.asikeida.wallshiftadvanced" \
     "$pkgdir/usr/share/plasma/wallpapers/io.github.asikeida.wallshiftadvanced"
 
+  install -Dm755 "$startdir/io.github.asikeida.wallshiftadvanced/contents/tools/wallshift-next" \
+    "$pkgdir/usr/bin/wallshift-next"
+  install -Dm644 "$startdir/io.github.asikeida.wallshiftadvanced/contents/tools/io.github.asikeida.wallshiftadvanced.next.desktop" \
+    "$pkgdir/usr/share/applications/io.github.asikeida.wallshiftadvanced.next.desktop"
+
   install -Dm644 "$startdir/LICENSE" \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
