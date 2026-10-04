@@ -108,7 +108,22 @@ WallpaperItem {
         return isNaN(time) ? 0 : time;
     }
 
+    function folderScanSettled() {
+        if (folderModels.count !== root.scanFolders.length)
+            return false;
+
+        for (var i = 0; i < folderModels.count; i++) {
+            var model = folderModels.objectAt(i);
+            if (!model || model.status === FolderListModel.Null || model.status === FolderListModel.Loading)
+                return false;
+        }
+        return true;
+    }
+
     function rebuildMedia() {
+        if (!root.folderScanSettled())
+            return;
+
         var found = [];
         var seen = {
         };
@@ -144,6 +159,10 @@ WallpaperItem {
                 found.push(MediaUtils.makeEntry(path, String(model.get(j, "fileName") || path), root.fileModifiedMs(model.get(j, "fileModified")), root.pathToUrl(path)));
             }
         }
+        if (addedFolder) {
+            root.scanFolders = folders;
+            return;
+        }
         var mode = String(root.configuration.RotationMode || "name_asc");
         if (mode === "mtime_desc")
             found.sort(function(a, b) {
@@ -161,11 +180,12 @@ WallpaperItem {
         root.mediaItems = found;
         root.randomQueue = [];
         root.failedMediaPaths = {};
-        if (addedFolder)
-            root.scanFolders = folders;
-
         var visibleIndex = root.indexOfMedia(previousVisible);
         if (visibleIndex >= 0) {
+            if (!wallpaperMedia.currentPath) {
+                root.showMedia(visibleIndex, true);
+                return;
+            }
             root.configuration.CurrentMedia = previousVisible;
             root.configuration.CurrentIndex = visibleIndex;
             root.configuration.writeConfig();

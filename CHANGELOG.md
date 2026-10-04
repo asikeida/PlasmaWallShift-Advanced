@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Restore the persisted wallpaper after Plasma reloads instead of leaving only the background color.
+- Wait for recursive folder scans to settle before deciding that configured media is missing.
+
 ## 0.4.0 - 2026-10-03
 
 - Add opt-in experimental local video wallpapers backed by Qt Multimedia.

@@ -103,7 +103,7 @@ original_plugin=$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.ev
 start_epoch=$(date +%s)
 
 qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
-    "var ds=desktops(); for (var i=0; i<ds.length; ++i) { if (ds[i].id === $target_id) { ds[i].wallpaperPlugin = '$plugin_id'; ds[i].currentConfigGroup = ['Wallpaper', '$plugin_id', 'General']; ds[i].writeConfig('WallpaperPaths', '$media_dir'); ds[i].writeConfig('IncludeImages', true); ds[i].writeConfig('IncludeVideos', true); ds[i].writeConfig('RotationMode', 'name_asc'); ds[i].writeConfig('RotateSeconds', 3600); ds[i].writeConfig('TransitionType', 11); ds[i].writeConfig('TransitionDuration', 600); ds[i].writeConfig('CurrentImage', ''); ds[i].writeConfig('CurrentMedia', ''); ds[i].reloadConfig(); } }" >/dev/null
+    "var ds=desktops(); for (var i=0; i<ds.length; ++i) { if (ds[i].id === $target_id) { ds[i].currentConfigGroup = ['Wallpaper', '$plugin_id', 'General']; ds[i].writeConfig('WallpaperPaths', '$media_dir'); ds[i].writeConfig('IncludeImages', true); ds[i].writeConfig('IncludeVideos', true); ds[i].writeConfig('RotationMode', 'name_asc'); ds[i].writeConfig('RotateSeconds', 3600); ds[i].writeConfig('TransitionType', 11); ds[i].writeConfig('TransitionDuration', 600); ds[i].writeConfig('CurrentImage', '$media_dir/01-image.png'); ds[i].writeConfig('CurrentMedia', '$media_dir/01-image.png'); ds[i].wallpaperPlugin = '$plugin_id'; ds[i].reloadConfig(); } }" >/dev/null
 
 passed=false
 for _ in $(seq 1 50); do
