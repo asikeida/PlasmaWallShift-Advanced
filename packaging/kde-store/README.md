@@ -2,10 +2,10 @@
 
 - Product name: **WallShift Advanced**
 - Category: **Plasma 6 Wallpaper Plugins**
-- Version: **0.4.0**
+- Version: **0.4.1**
 - License: **GPL-3.0-or-later**
 - Homepage: <https://github.com/asikeida/PlasmaWallShift-Advanced>
-- Package: `wallshift-advanced-0.4.0.tar.gz`
+- Package: `wallshift-advanced-0.4.1.tar.gz`
 - Primary screenshot: `screenshots/settings-en.png`
 - Chinese screenshot: `screenshots/settings-zh_CN.png`
 

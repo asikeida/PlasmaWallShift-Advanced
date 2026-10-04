@@ -1,5 +1,5 @@
 pkgname=plasma6-wallpapers-wallshift-advanced
-pkgver=0.4.0
+pkgver=0.4.1
 pkgrel=1
 pkgdesc='KDE Plasma 6 image and video wallpaper rotation with editable animated transitions'
 arch=('any')

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-10-04
 
 - Restore the persisted wallpaper after Plasma reloads instead of leaving only the background color.
 - Wait for recursive folder scans to settle before deciding that configured media is missing.
